@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<project name="sample" default="all" basedir=".">
+
+	<!-- find wtk -->
+	<property environment="env"/>
+	<property name="env.WTK_HOME" value="c:\WTK-2.2" />
+	<property name="wtk.home" value="${env.WTK_HOME}" />
+	<echo level="info">wtk.home: ${wtk.home}</echo>
+	
+	<!-- set wtk parameters -->
+    <property name="wtk.cldc.version" value="1.1"/>
+    <property name="wtk.midp.version" value="2.0"/>
+    <taskdef resource="antenna.properties"/>
+	
+	<!-- main script -->
+	<property name="script.name"  value="hello"/>
+	<property name="script.dir"   value="examples/lua"/>
+	
+	<target name="clean">
+	    <delete failonerror="false" dir="build"/>
+	</target>
+
+	<target name="dirs">
+        <mkdir dir="build"/>
+        <mkdir dir="build/tool"/>
+        <mkdir dir="build/classes"/>
+	</target>
+	
+	<target name="tools" depends="dirs">
+		<ant antfile="build.xml" target="bcel-lib"/>
+		<javac destdir="build/tool" classpath="lib/bcel-5.2.jar">
+			<src path="src/core"/>
+			<src path="src/jse"/>
+		</javac>
+	</target>
+
+	<!-- compile script into lua bytecode -->
+	<target name="luac" depends="tools">
+		<java classname="luac" classpath="build/tool">
+			<arg line="-o build/classes/${script.name}.lua"/>
+			<arg line="${script.dir}/${script.name}.lua"/>
+		</java>
+	</target>
+
+	<!-- compile script into java bytecode -->
+	<target name="luajc" depends="tools">
+		<java classname="luajc" classpath="build/tool:lib/bcel-5.2.jar">
+			<arg line="-verbose"/>
+			<arg line="-srcdir ${script.dir}"/>
+			<arg line="-destdir build/classes"/>
+			<arg line="${script.name}.lua"/>
+		</java>
+	</target>
+	
+	<target name="classes" depends="dirs">
+        <wtkbuild srcdir="src/core"     destdir="build/classes" preverify="false"/>
+        <wtkbuild srcdir="src/jme"      destdir="build/classes" preverify="false"/>
+		<wtkbuild srcdir="examples/jme" destdir="build/classes" preverify="false"/>
+	</target>
+		
+    <target name="jad" depends="classes">
+		<wtkjad jadfile="build/sample.jad"
+			manifest="build/MANIFEST.MF"
+			name="LuaJ Sample Midlet"
+			vendor="luaj.org"
+			version="0.1" >
+		    <midlet name="LuaJ Sample Midlet" class="SampleMIDlet"/>
+			<attribute name="script" value="${script.name}"/>
+		</wtkjad>
+    </target>
+
+	<target name="jar" depends="luajc,classes,jad">
+        <wtkpackage jarfile="build/sample.jar"
+                    jadfile="build/sample.jad"
+                    obfuscate="false"
+                    preverify="false"
+                    autoversion="true">
+            <fileset dir="build/classes"/>
+        </wtkpackage>
+	</target>
+	
+	<target name="obf" depends="jar">
+        <wtkobfuscate jarfile="build/sample.jar"
+					  jadfile="build/sample.jad">
+        	<preserve class="${script.name}"/>
+			<argument value="-printmapping build/mapping.txt"/>
+			<argument value="-repackageclasses"/>
+        	<argument value="-allowaccessmodification"/>
+			<argument value='""'/>
+   		</wtkobfuscate>
+	</target>
+
+	<target name="package" depends="jad,jar,obf">
+		<wtkpreverify jarfile="build/sample.jar"
+                      jadfile="build/sample.jad"/>
+    </target>
+
+	<target name="run" depends="package">
+		<wtkrun jadfile="build/sample.jad" device="DefaultColorPhone"/>
+	</target>
+	
+	<target name="all" depends="clean,package,run"/>
+
+</project>

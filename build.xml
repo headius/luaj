@@ -1,0 +1,195 @@
+<project default="all">
+	<property file="version.properties"/>
+	
+	<property environment="env"/>
+	
+	<property name="jar.name.jme" value="luaj-jme-${version}.jar"/>
+	<property name="jar.name.jse" value="luaj-jse-${version}.jar"/>
+
+	<import file="wtk.xml"/>
+
+	<target name="clean">
+		<delete dir="build"/>
+		<delete>
+		    <fileset dir="." includes="luaj-*.jar"/>
+		</delete>
+	</target>
+
+	<available file="lib/bcel-5.2.jar" property="bcel.lib.exists"/>			
+	<available file="lib/luaj-j2se-1.0.4.jar" property="luaj1.lib.exists"/>			
+	<available file="lib/javacc.jar" property="javacc.lib.exists"/>			
+
+	<target name="bcel-lib" unless="bcel.lib.exists">
+		<mkdir dir="lib"/>
+		<get src="http://archive.apache.org/dist/jakarta/bcel/binaries/bcel-5.2.tar.gz" 
+			dest="lib/bcel-5.2.tar.gz"/>
+		<gunzip src="lib/bcel-5.2.tar.gz" dest="lib/bcel-5.2.tar"/>
+		<untar src="lib/bcel-5.2.tar" dest="lib" overwrite="true">
+		    <patternset>
+		        <include name="**/*.jar"/>
+		    </patternset>
+		    <mapper type="flatten"/>
+		</untar>
+	</target>
+	
+	<target name="luaj1-lib" unless="luaj1.lib.exists">
+		<get src="http://downloads.sourceforge.net/project/luaj/luaj-1.0/1.0.4/luaj-1.0.4.zip"
+			dest="lib/luaj-1.0.4.zip"/>
+		<unzip src="lib/luaj-1.0.4.zip" dest="lib" overwrite="true">
+		    <patternset>
+		        <include name="**/*.jar"/>
+		    </patternset>
+		    <mapper type="flatten"/>
+		</unzip>
+	</target>
+	
+	<target name="javacc-lib" unless="javacc.lib.exists">
+		<get src="https://javacc.dev.java.net/files/documents/17/138912/javacc-5.0.zip"
+			dest="lib/javacc-5.0.zip"/>
+		<unzip src="lib/javacc-5.0.zip" dest="lib" overwrite="true">
+		    <patternset>
+		        <include name="**/javacc.jar"/>
+		    </patternset>
+		    <mapper type="flatten"/>
+		</unzip>
+	</target>
+
+	<target name="parser" depends="javacc-lib">
+		<java classname="javacc" classpath="lib/javacc.jar">
+			<arg line="grammar/LuaParser.jj"/>
+		</java>
+	</target>
+		
+	<target name="compile" depends="wtk-or-fail,bcel-lib">
+		<delete dir="build/jme/src"/>
+		<delete dir="build/jse/src"/>
+		<mkdir dir="build/jme/src"/>
+		<mkdir dir="build/jse/src"/>
+		<mkdir dir="build/jme/classes"/>
+		<mkdir dir="build/jse/classes"/>
+		<copy todir="build/jme/src">
+			<fileset dir="src/core"/>
+			<fileset dir="src/jme"/>
+			<filterchain>
+				<tokenfilter><replacestring from='"Luaj 0.0"' to='"luaj-jme ${version}"'/></tokenfilter>
+			</filterchain>
+		</copy>
+		<copy todir="build/jse/src">
+			<fileset dir="src/core"/>
+			<filterchain>
+				<tokenfilter><replacestring from='"Luaj 0.0"' to='"luaj-jse ${version}"'/></tokenfilter>
+			</filterchain>
+		</copy>
+		<copy todir="build/jse/src">
+			<fileset dir="src/jse"/>
+			<filterchain>
+				<tokenfilter><replacestring from='&lt;String&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Stat&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Exp&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Name&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Block&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;TableField&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;VarExp&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Exp.VarExp&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Object,String&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Double,String&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Integer,Integer&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;Exp,Integer&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;String,byte[]&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;String,Variable&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;LuaValue,String&gt;' to=''/></tokenfilter>
+				<tokenfilter><replacestring from='&lt;LuaString,String&gt;' to=''/></tokenfilter>
+			</filterchain>
+		</copy>
+		<javac destdir="build/jme/classes" encoding="utf-8" source="1.3" target="1.2" bootclasspathref="wtk-libs"
+			srcdir="build/jme/src"/>
+		<javac destdir="build/jse/classes" encoding="utf-8" source="1.3" target="1.3"
+			classpath="lib/bcel-5.2.jar"
+			srcdir="build/jse/src"
+			excludes="**/script/*,**/Lua2Java*,lua*"/>
+		<javac destdir="build/jse/classes" encoding="utf-8" source="1.5" target="1.5"
+			classpath="build/jse/classes"
+			srcdir="build/jse/src"
+			includes="**/script/*,**/Lua2Java*"/>
+		<javac destdir="build/jse/classes" encoding="utf-8" source="1.3" target="1.3"
+			classpath="build/jse/classes"
+			srcdir="build/jse/src"
+			includes="lua*"/>
+	</target>
+	
+	<target name="jar-jme" depends="compile">
+		<jar destfile="${jar.name.jme}" basedir="build/jme/classes"/>
+	</target>
+	
+	<target name="jar-jse" depends="compile">
+		<jar destfile="${jar.name.jse}">
+		    <fileset dir="build/jse/classes"/>
+		    <fileset dir="src/jse/">
+				<include name="META-INF/services/**"/>
+		    </fileset>
+		</jar>
+	</target>
+
+	<target name="doc">
+		<delete dir="docs/api"/>
+		<mkdir dir="docs/api"/>
+		<javadoc packagenames="org.luaj.vm2.*"
+				sourcepath="src/core"
+				defaultexcludes="yes"
+				destdir="docs/api"
+				author="true"
+				version="true"
+				use="true"
+				windowtitle="Luaj API">
+			<doctitle><![CDATA[<h1>Luaj API</h1>]]></doctitle>
+			<bottom><![CDATA[<i>Copyright &#169; 2007-2008 Luaj.org. All Rights Reserved.</i>]]></bottom>
+			<tag name="todo" scope="all" description="To do:"/>
+			<group title="Core VM" packages="org.luaj.vm.*"/>
+			<link offline="true" href="http://sourceforge.net/projects/luaj/" packagelistLoc="C:\tmp"/>
+			<link href="http://sourceforge.net/projects/luaj/"/>
+		</javadoc>
+	</target>
+	
+	<target name="dist" depends="all">
+		<delete dir="build/luaj-${version}"/>
+		<mkdir dir="build/luaj-${version}/src"/>
+		<mkdir dir="build/luaj-${version}/lib"/>
+		<copy todir="build/luaj-${version}/src">
+		    <fileset dir="src">
+				<exclude name="src/test/**"/>
+				<exclude name="**/antlr/**"/>
+				<exclude name="**/lst/**"/>
+				<exclude name="**/JavaCodeGenerator.java"/>
+				<exclude name="**/LuaJCompiler.java"/>
+		    </fileset>
+		</copy>
+		<copy todir="build/luaj-${version}/test">
+		    <fileset dir="test"/>
+		</copy>
+		<copy todir="build/luaj-${version}/examples">
+		    <fileset dir="examples"/>
+		</copy>
+		<copy todir="build/luaj-${version}/lib">
+		    <fileset dir=".">
+				<include name="*-${version}.jar"/>
+		    </fileset>		
+		</copy>
+		<copy todir="build/luaj-${version}">
+		    <fileset dir=".">
+				<include name="build.xml"/>
+				<include name="build-coverage.xml"/>
+				<include name="version.properties"/>
+				<include name="wtk.xml"/>
+				<include name="README.html"/>
+				<include name="names.csv"/>
+				<include name=".classpath"/>
+				<include name=".project"/>
+		    </fileset>		
+		</copy>
+		<zip destfile="luaj-${version}.zip" 
+			basedir="build" includes="luaj-${version}/**"/>
+	</target>
+	
+	<target name="all" depends="clean,jar-jme,jar-jse"/>
+		
+</project>
