@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 2009 Luaj.org. All rights reserved.
+* Copyright (c) 2009-2011 Luaj.org. All rights reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -29,10 +29,36 @@ import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaValue;
 import org.luaj.vm2.Varargs;
 
-
+/**
+ * Helper class to coerce values from lua to Java within the luajava library. 
+ * <p>
+ * This class is primarily used by the {@link LuajavaLib}, 
+ * but can also be used directly when working with Java/lua bindings. 
+ * <p>
+ * To coerce to specific Java values, generally the {@code toType()} methods 
+ * on {@link LuaValue} may be used:
+ * <ul>
+ * <li>{@link LuaValue#toboolean()}</li>
+ * <li>{@link LuaValue#tobyte()}</li>
+ * <li>{@link LuaValue#tochar()}</li>
+ * <li>{@link LuaValue#toshort()}</li>
+ * <li>{@link LuaValue#toint()}</li>
+ * <li>{@link LuaValue#tofloat()}</li>
+ * <li>{@link LuaValue#todouble()}</li>
+ * <li>{@link LuaValue#tojstring()}</li>
+ * <li>{@link LuaValue#touserdata()}</li>
+ * <li>{@link LuaValue#touserdata(Class)}</li>
+ * </ul>
+ * <p>
+ * For data in lua tables, the various methods on {@link LuaTable} can be used directly 
+ * to convert data to something more useful.
+ * 
+ * @see LuajavaLib
+ * @see CoerceJavaToLua
+ */
 public class CoerceLuaToJava {
 
-	public static interface Coercion { 
+	static interface Coercion { 
 		public Object coerce( LuaValue value );
 		public int score( int paramType );
 	};
@@ -174,10 +200,12 @@ public class CoerceLuaToJava {
 			} 
 			public int score(int paramType) {
 				switch ( paramType ) {
-				case LuaValue.TUSERDATA:
+				case LuaValue.TSTRING:
 					return 0;
-				default: 
+				case LuaValue.TUSERDATA:
 					return 1;
+				default: 
+					return 2;
 				}
 			}
 		};
@@ -202,8 +230,10 @@ public class CoerceLuaToJava {
 			} 
 			public int score(int paramType) {
 				switch ( paramType ) {
-				case LuaValue.TSTRING:
+				case LuaValue.TUSERDATA:
 					return 0;
+				case LuaValue.TSTRING:
+					return 1;
 				default: 
 					return 0x10;
 				}
@@ -238,7 +268,8 @@ public class CoerceLuaToJava {
 		if ( co != null ) {
 			int b = LuajavaLib.paramBaseTypeFromParamType(paramType);
 			int d = LuajavaLib.paramDepthFromParamType(paramType);
-			return co.score( b ) * d;
+			int s = co.score(b);
+			return s * (d+1);
 		}
 		if ( c.isArray() ) {
 			Class typ = c.getComponentType();

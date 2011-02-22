@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 2009 Luaj.org. All rights reserved.
+* Copyright (c) 2009-2011 Luaj.org. All rights reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,22 @@
 ******************************************************************************/
 package org.luaj.vm2;
 
+/**
+ * Class to encapsulate behavior of the singleton instance {@code nil} 
+ * <p>
+ * There will be one instance of this class, {@link LuaValue#NIL}, 
+ * per Java virtual machine.  
+ * However, the {@link Varargs} instance {@link LuaValue#NONE}
+ * which is the empty list, 
+ * is also considered treated as a nil value by default.  
+ * <p>
+ * Although it is possible to test for nil using Java == operator, 
+ * the recommended approach is to use the method {@link LuaValue#isnil()} 
+ * instead.  By using that any ambiguities between 
+ * {@link LuaValue#NIL} and {@link LuaValue#NONE} are avoided.
+ * @see LuaValue
+ * @see LuaValue#NIL
+ */
 public class LuaNil extends LuaValue {
 	
 	static final LuaNil _NIL = new LuaNil();

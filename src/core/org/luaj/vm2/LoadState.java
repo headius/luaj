@@ -25,8 +25,44 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-/*
-** Loader to load compiled function prototypes
+
+/**
+* Class to manage loading of {@link Prototype} instances.
+* <p>
+* The {@link LoadState} class exposes one main function, 
+* namely {@link #load(InputStream, String, LuaValue)}, 
+* to be used to load code from a particular input stream.  
+* <p>
+* A simple pattern for loading and executing code is
+* <pre> {@code
+* LuaValue _G = JsePlatform.standardGlobals();
+* LoadState.load( new FileInputStream("main.lua"), "main.lua", _G ).call();
+* } </pre>
+* This should work regardless of which {@link LuaCompiler}
+* has been installed.
+* <p>
+*  
+* Prior to loading code, a compiler should be installed. 
+* <p>
+* By default, when using {@link JsePlatform} or {@JmePlatform}
+* to construct globals, the {@link LuaC} compiler is installed. 
+* <p>
+* To override the default compiler with, say, the {@link LuaJC}
+* lua-to-java bytecode compiler, install it before loading, 
+* for example:
+* <pre> {@code
+* LuaValue _G = JsePlatform.standardGlobals();
+* LuaJC.install();
+* LoadState.load( new FileInputStream("main.lua"), "main.lua", _G ).call();
+* } </pre>
+* 
+* @see LuaCompiler
+* @see LuaClosure
+* @see LuaFunction
+* @see LoadState#compiler
+* @see LoadState#load(InputStream, String, LuaValue)
+* @see LuaC
+* @see LuaJC
 */
 public class LoadState {
 	
@@ -53,7 +89,12 @@ public class LoadState {
 	public static final int LUA_TTHREAD			= 8;
 	public static final int LUA_TVALUE          = 9;
 	
-	/** Interface for the compiler, if it is installed. */
+	/** Interface for the compiler, if it is installed. 
+	 * <p>
+	 * See the {@link LuaClosure} documentation for examples of how to use the compiler. 
+	 * @see LuaClosure
+	 * @see #load(InputStream, String, LuaValue)
+	 * */
 	public interface LuaCompiler {
 		
 		/** Load into a Closure or LuaFunction from a Stream and initializes the environment 
@@ -106,6 +147,9 @@ public class LoadState {
 	private byte[] buf = new byte[512];
 	
 	
+	/** Load a 4-byte int value from the input stream
+	 * @return the int value laoded.  
+	 **/
 	int loadInt() throws IOException {
 		is.readFully(buf,0,4);
 		return luacLittleEndian? 
@@ -113,6 +157,9 @@ public class LoadState {
 				(buf[0] << 24) | ((0xff & buf[1]) << 16) | ((0xff & buf[2]) << 8) | (0xff & buf[3]);
 	}
 	
+	/** Load an array of int values from the input stream
+	 * @return the array of int values laoded.  
+	 **/
 	int[] loadIntArray() throws IOException {
 		int n = loadInt();
 		if ( n == 0 )
@@ -132,7 +179,9 @@ public class LoadState {
 		return array;
 	}
 	
-
+	/** Load a long  value from the input stream
+	 * @return the long value laoded.  
+	 **/
 	long loadInt64() throws IOException {
 		int a,b;
 		if ( this.luacLittleEndian ) {
@@ -145,6 +194,9 @@ public class LoadState {
 		return (((long)b)<<32) | (((long)a)&0xffffffffL);
 	}
 
+	/** Load a lua strin gvalue from the input stream
+	 * @return the {@link LuaString} value laoded.  
+	 **/
 	LuaString loadString() throws IOException {
 		int size = loadInt();
 		if ( size == 0 )
@@ -154,6 +206,11 @@ public class LoadState {
 		return LuaString.valueOf( bytes, 0, bytes.length - 1 );
 	}
 	
+	/**
+	 * Convert bits in a long value to a {@link LuaValue}. 
+	 * @param bits long value containing the bits
+	 * @return {@link LuaInteger} or {@link LuaDouble} whose value corresponds to the bits provided.
+	 */
 	public static LuaValue longBitsToLuaNumber( long bits ) {
 		if ( ( bits & ( ( 1L << 63 ) - 1 ) ) == 0L ) {
 			return LuaValue.ZERO;
@@ -174,6 +231,11 @@ public class LoadState {
 		return LuaValue.valueOf( Double.longBitsToDouble(bits) );
 	}
 	
+	/** 
+	 * Load a number from a binary chunk
+	 * @return the {@link LuaValue} loaded
+	 * @throws IOException if an i/o exception occurs
+	 */
 	LuaValue loadNumber() throws IOException {
 		if ( luacNumberFormat == NUMBER_FORMAT_INTS_ONLY ) {
 			return LuaInteger.valueOf( loadInt() );
@@ -182,6 +244,11 @@ public class LoadState {
 		}
 	}
 
+	/**
+	 * Load a list of constants from a binary chunk
+	 * @param f the function prototype
+	 * @throws IOException if an i/o exception occurs
+	 */
 	void loadConstants(Prototype f) throws IOException {
 		int n = loadInt();
 		LuaValue[] values = n>0? new LuaValue[n]: NOVALUES;
@@ -215,6 +282,11 @@ public class LoadState {
 		f.p = protos;
 	}
 
+	/**
+	 * Load the debug infor for a function prototype
+	 * @param f the function Prototype
+	 * @throws IOException if there is an i/o exception
+	 */
 	void loadDebug( Prototype f ) throws IOException {
 		f.lineinfo = loadIntArray();
 		int n = loadInt();
@@ -233,6 +305,12 @@ public class LoadState {
 		}
 	}
 
+	/** 
+	 * Load a function prototype from the input stream
+	 * @param p name of the source
+	 * @return {@link Prototype} instance that was loaded
+	 * @throws IOException
+	 */
 	public Prototype loadFunction(LuaString p) throws IOException {
 		Prototype f = new Prototype();
 //		this.L.push(f);
@@ -257,6 +335,10 @@ public class LoadState {
 		 return f;
 	}
 
+	/**
+	 * Load the lua chunk header values. 
+	 * @throws IOException if an i/o exception occurs. 
+	 */
 	public void loadHeader() throws IOException {
 		luacVersion = is.readByte();
 		luacFormat = is.readByte();
@@ -268,6 +350,15 @@ public class LoadState {
 		luacNumberFormat = is.readByte();
 	}
 
+	/**
+	 * Load lua in either binary or text form from an input stream.
+	 * @param firstByte the first byte of the input stream
+	 * @param stream InputStream to read, after having read the first byte already
+	 * @param name Name to apply to the loaded chunk
+	 * @return {@link Prototype} that was loaded
+	 * @throws IllegalArgumentException if the signature is bac
+	 * @throws IOException if an IOException occurs
+	 */
 	public static LuaFunction load( InputStream stream, String name, LuaValue env ) throws IOException {
 		if ( compiler != null )
 			return compiler.load(stream, name, env);
@@ -280,6 +371,15 @@ public class LoadState {
 		}
 	}
 
+	/**
+	 * Load lua thought to be a binary chunk from its first byte from an input stream.
+	 * @param firstByte the first byte of the input stream
+	 * @param stream InputStream to read, after having read the first byte already
+	 * @param name Name to apply to the loaded chunk
+	 * @return {@link Prototype} that was loaded
+	 * @throws IllegalArgumentException if the signature is bac
+	 * @throws IOException if an IOException occurs
+	 */
 	public static Prototype loadBinaryChunk( int firstByte, InputStream stream, String name ) throws IOException {
 
 		// check rest of signature
@@ -306,6 +406,11 @@ public class LoadState {
 		return s.loadFunction( LuaString.valueOf(sname) );
 	}
 	
+	/**
+	 * Construct a source name from a supplied chunk name
+	 * @param name String name that appears in the chunk
+	 * @return source file name
+	 */
     public static String getSourceName(String name) {
         String sname = name;
         if ( name.startsWith("@") || name.startsWith("=") )
